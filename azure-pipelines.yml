@@ -1,4 +1,14 @@
 # ASP.NET
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: 'Azure subscription 1(fcf0dbd4-3286-4977-97a6-7f603de4b020)'
+    appType: 'webApp'
+    appName: 'webAppTrial11'
+    deployToSlotOrASE: true
+    resourceGroupName: 'trialrs'
+    slotName: 'production'
+    package: '$(System.DefaultWorkingDirectory)/**/*.zip'
+    deploymentMethod: 'auto'
 # Build and test ASP.NET projects.
 # Add steps that publish symbols, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
