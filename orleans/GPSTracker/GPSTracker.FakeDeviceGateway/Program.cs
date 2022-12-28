@@ -1,11 +1,12 @@
 using GPSTracker.Common;
 using GPSTracker.GrainInterface;
-using Orleans;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using System.Diagnostics;
 
 namespace GPSTracker.FakeDeviceGateway;
 
-internal class Program
+internal static class Program
 {
     private static Random Random => Random.Shared;
 
@@ -19,11 +20,12 @@ internal class Program
 
     private static async Task Main(string[] args)
     {
-        var client = new ClientBuilder()
-            .UseLocalhostClustering()
+        var host = new HostBuilder()
+            .UseOrleansClient(builder => builder.UseLocalhostClustering())
+            .UseConsoleLifetime()
             .Build();
 
-        await client.Connect();
+        await host.StartAsync();
 
         // Simulate 20 devices
         var devices = new List<Model>();
@@ -39,26 +41,22 @@ internal class Program
             });
         }
 
-        var timer = new System.Timers.Timer
-        {
-            Interval = 1000
-        };
-        timer.Elapsed += (s, e) =>
+        await using Timer timer = new(_ =>
         {
             Console.Write(". ");
             Interlocked.Exchange(ref _counter, 0);
-        };
-        timer.Start();
-        var cancellation = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, _) => cancellation.Cancel();
+        }, null, 1_000, 1_000);
+
+        IGrainFactory factory = host.Services.GetRequiredService<IGrainFactory>();
+        IHostApplicationLifetime lifeTime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 
         // Update each device in a loop.
-        var tasks = new List<Task>();
-        while (!cancellation.IsCancellationRequested)
+        var tasks = new List<Task>(capacity: devices.Count);
+        while (!lifeTime.ApplicationStopping.IsCancellationRequested)
         {
             foreach (var model in devices)
             {
-                tasks.Add(SendMessage(client, model));
+                tasks.Add(SendMessage(factory, model));
             }
 
             await Task.WhenAll(tasks);
@@ -126,7 +124,7 @@ internal class Program
 
     public static double NextDouble(double min, double max) => Random.NextDouble() * (max - min) + min;
 
-    private class Model
+    private sealed class Model
     {
         public Stopwatch TimeSinceLastUpdate { get; } = Stopwatch.StartNew();
         public int DeviceId { get; set; }
